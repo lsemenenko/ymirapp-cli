@@ -90,6 +90,13 @@ services:
     arguments:
       - !tagged subscriber
 
+  Ymir\Cli\FileUploader:
+    arguments:
+      $concurrency: 15
+      $connectTimeout: 10
+      $maxRetries: 5
+      $timeout: 300
+
   Ymir\Cli\ParallelFileHasher:
     arguments:
       $concurrency: 8

@@ -174,7 +174,11 @@ class ProcessAssetsStep implements DeploymentStepInterface
         $progressBar->setFormat('  > Uploading new asset files (<comment>%current%/%max%</comment>)');
 
         $requests = LazyCollection::make($requests)->map(function (array $request, string $realFilePath) {
-            $request['body'] = fopen($realFilePath, 'r+');
+            if (!is_readable($realFilePath)) {
+                throw new \RuntimeException(sprintf('Cannot read file: %s', $realFilePath));
+            }
+
+            $request['body'] = fopen($realFilePath, 'r');
 
             return $request;
         });
