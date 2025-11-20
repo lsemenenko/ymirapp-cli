@@ -21,6 +21,7 @@ use Ymir\Cli\ApiClient;
 use Ymir\Cli\Console\Input;
 use Ymir\Cli\Console\Output;
 use Ymir\Cli\FileUploader;
+use Ymir\Cli\ParallelFileHasher;
 use Ymir\Cli\Project\Configuration\ProjectConfiguration;
 
 class ProcessAssetsStep implements DeploymentStepInterface
@@ -40,6 +41,13 @@ class ProcessAssetsStep implements DeploymentStepInterface
     private $assetsDirectory;
 
     /**
+     * The parallel file hasher.
+     *
+     * @var ParallelFileHasher
+     */
+    private $hasher;
+
+    /**
      * The Ymir project configuration.
      *
      * @var ProjectConfiguration
@@ -56,10 +64,11 @@ class ProcessAssetsStep implements DeploymentStepInterface
     /**
      * Constructor.
      */
-    public function __construct(ApiClient $apiClient, string $assetsDirectory, ProjectConfiguration $projectConfiguration, FileUploader $uploader)
+    public function __construct(ApiClient $apiClient, string $assetsDirectory, ParallelFileHasher $hasher, ProjectConfiguration $projectConfiguration, FileUploader $uploader)
     {
         $this->apiClient = $apiClient;
         $this->assetsDirectory = $assetsDirectory;
+        $this->hasher = $hasher;
         $this->projectConfiguration = $projectConfiguration;
         $this->uploader = $uploader;
     }
@@ -145,11 +154,11 @@ class ProcessAssetsStep implements DeploymentStepInterface
             $assetFiles[] = [
                 'real_path' => $assetFile->getRealPath(),
                 'relative_path' => str_replace('\\', '/', $assetFile->getRelativePathname()),
-                'hash' => md5_file((string) $assetFile->getRealPath()),
             ];
         }
 
-        return collect($assetFiles);
+        // Hash files in parallel for better performance
+        return $this->hasher->hashFilesWithMetadata($assetFiles, 'md5');
     }
 
     /**

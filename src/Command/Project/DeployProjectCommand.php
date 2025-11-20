@@ -20,6 +20,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Ymir\Cli\ApiClient;
 use Ymir\Cli\CliConfiguration;
 use Ymir\Cli\Command\Uploads\ImportUploadsCommand;
+use Ymir\Cli\ParallelFileHasher;
 use Ymir\Cli\Project\Configuration\ProjectConfiguration;
 
 class DeployProjectCommand extends AbstractProjectDeploymentCommand
@@ -46,6 +47,13 @@ class DeployProjectCommand extends AbstractProjectDeploymentCommand
     private $assetsDirectory;
 
     /**
+     * The parallel file hasher.
+     *
+     * @var ParallelFileHasher
+     */
+    private $hasher;
+
+    /**
      * The build "uploads" directory.
      *
      * @var string
@@ -55,11 +63,12 @@ class DeployProjectCommand extends AbstractProjectDeploymentCommand
     /**
      * Constructor.
      */
-    public function __construct(ApiClient $apiClient, string $assetsDirectory, CliConfiguration $cliConfiguration, ProjectConfiguration $projectConfiguration, string $uploadsDirectory, array $deploymentSteps = [])
+    public function __construct(ApiClient $apiClient, string $assetsDirectory, CliConfiguration $cliConfiguration, ParallelFileHasher $hasher, ProjectConfiguration $projectConfiguration, string $uploadsDirectory, array $deploymentSteps = [])
     {
         parent::__construct($apiClient, $cliConfiguration, $projectConfiguration, $deploymentSteps);
 
         $this->assetsDirectory = $assetsDirectory;
+        $this->hasher = $hasher;
         $this->uploadsDirectory = $uploadsDirectory;
     }
 
@@ -118,12 +127,19 @@ class DeployProjectCommand extends AbstractProjectDeploymentCommand
     {
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory), \RecursiveIteratorIterator::SELF_FIRST);
 
-        return hash('sha256', collect($iterator)->filter(function (\SplFileInfo $file) {
+        // Collect file paths and their relative paths
+        $files = collect($iterator)->filter(function (\SplFileInfo $file) {
             return $file->isFile();
         })->mapWithKeys(function (\SplFileInfo $file) {
             return [substr($file->getRealPath(), (int) strrpos($file->getRealPath(), '.ymir')) => $file->getRealPath()];
-        })->map(function (string $realPath, string $relativePath) {
-            return sprintf('%s|%s', $relativePath, hash_file('sha256', $realPath));
+        });
+
+        // Hash files in parallel for better performance
+        $hashes = $this->hasher->hashFiles($files->values()->all(), 'sha256');
+
+        // Combine relative paths with hashes
+        return hash('sha256', $files->map(function (string $realPath, string $relativePath) use ($hashes) {
+            return sprintf('%s|%s', $relativePath, $hashes->get($realPath, ''));
         })->implode(''));
     }
 }

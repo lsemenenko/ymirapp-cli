@@ -89,3 +89,8 @@ services:
   Ymir\Cli\EventDispatcher\AutowiredEventDispatcher:
     arguments:
       - !tagged subscriber
+
+  Ymir\Cli\ParallelFileHasher:
+    arguments:
+      $concurrency: 8
+      $chunkSize: 50
